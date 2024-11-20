@@ -3,7 +3,6 @@ package io.minimum.minecraft.superbvote.votes;
 import com.vexsoftware.votifier.model.VotifierEvent;
 import io.minimum.minecraft.superbvote.SuperbVote;
 import io.minimum.minecraft.superbvote.commands.SuperbVoteCommand;
-import io.minimum.minecraft.superbvote.configuration.SuperbVoteConfiguration;
 import io.minimum.minecraft.superbvote.configuration.message.MessageContext;
 import io.minimum.minecraft.superbvote.signboard.TopPlayerSignFetcher;
 import io.minimum.minecraft.superbvote.storage.MysqlVoteStorage;
@@ -11,6 +10,8 @@ import io.minimum.minecraft.superbvote.storage.VoteStorage;
 import io.minimum.minecraft.superbvote.util.BrokenNag;
 import io.minimum.minecraft.superbvote.util.PlayerVotes;
 import io.minimum.minecraft.superbvote.votes.rewards.VoteReward;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.commons.lang3.time.DateUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -41,13 +42,15 @@ public class SuperbVoteListener implements Listener {
                 worldName = op.getPlayer().getWorld().getName();
             }
 
-            VoteStorage voteStorage = SuperbVote.getPlugin().getVoteStorage();
-            VoteStreak voteStreak = voteStorage.getVoteStreakIfSupported(op.getUniqueId(), false);
-            PlayerVotes pvCurrent = voteStorage.getVotes(op.getUniqueId());
-            PlayerVotes pv = new PlayerVotes(op.getUniqueId(), op.getName(), pvCurrent.getVotes() + 1, pvCurrent.getLastVote(), PlayerVotes.Type.FUTURE);
             Vote vote = new Vote(op.getName(), op.getUniqueId(), event.getVote().getServiceName(),
                     event.getVote().getAddress().equals(SuperbVoteCommand.FAKE_HOST_NAME_FOR_VOTE), worldName, new Date());
 
+            VoteStorage voteStorage = SuperbVote.getPlugin().getVoteStorage();
+            PlayerVotes pvCurrent = voteStorage.getVotes(op.getUniqueId());
+            PlayerVotes pv = new PlayerVotes(op.getUniqueId(), op.getName(), pvCurrent.getVotes() + 1,
+                    pvCurrent.getLastVotes(), PlayerVotes.Type.FUTURE);
+
+            VoteStreak voteStreak = voteStorage.getVoteStreakIfSupported(op.getUniqueId(), false);
             if (!vote.isFakeVote()) {
                 if (SuperbVote.getPlugin().getConfiguration().getStreaksConfiguration().isSharedCooldownPerService()) {
                     if (voteStreak == null) {
@@ -91,17 +94,19 @@ public class SuperbVoteListener implements Listener {
         }
 
         if (SuperbVote.getPlugin().getConfig().getBoolean("votes.one-vote-per-day")
-            && pv.getLastVote() != null
-            && DateUtils.isSameDay(pv.getLastVote(), vote.getReceived())) {
+            && pv.hasVoteOnSameDay(vote.getServiceName(), vote.getReceived())) {
 
             SuperbVote.getPlugin()
                     .getLogger()
-                    .log(Level.INFO, "Discarding vote: " + vote.getName() + " already received a vote the same day at " + vote.getReceived());
+                    .log(Level.INFO, "Discarding vote: " + vote.getName() +
+                            " already received a vote the same day at " + pv.getLastVotes().get(vote.getServiceName()) +
+                            " for service:" + vote.getServiceName());
             return;
         }
+        pv.updateLastVotes(vote.getServiceName(), vote.getReceived());
         if (queue) {
             if (!SuperbVote.getPlugin().getConfiguration().shouldQueueVotes()) {
-                SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + vote.getName() + " (service: " +
+                SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + vote.getName() + " (service:" +
                         vote.getServiceName() + ") because they aren't online.");
                 return;
             }
@@ -113,7 +118,7 @@ public class SuperbVoteListener implements Listener {
             SuperbVote.getPlugin().getQueuedVotes().addVote(vote);
         } else {
             if (!vote.isFakeVote() || SuperbVote.getPlugin().getConfig().getBoolean("votes.process-fake-votes")) {
-                SuperbVote.getPlugin().getVoteStorage().addVote(vote);
+                SuperbVote.getPlugin().getVoteStorage().addVote(vote, pv);
             }
 
             if (!wasQueued) {
@@ -152,7 +157,9 @@ public class SuperbVoteListener implements Listener {
             if (!votes.isEmpty()) {
                 for (Vote vote : votes) {
                     processVote(pv, voteStreak, vote, false, false, true);
-                    pv = new PlayerVotes(pv.getUuid(), event.getPlayer().getName(),pv.getVotes() + 1, pv.getLastVote(), PlayerVotes.Type.CURRENT);
+                    pv = new PlayerVotes(pv.getUuid(), event.getPlayer().getName(),pv.getVotes() + 1,
+                            pv.getLastVotes(), PlayerVotes.Type.CURRENT);
+                    pv.updateLastVotes(vote.getServiceName(), vote.getReceived());
                 }
                 afterVoteProcessing();
             }

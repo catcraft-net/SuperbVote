@@ -29,7 +29,8 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
     private static final int TABLE_VERSION_2 = 2;
     private static final int TABLE_VERSION_3 = 3;
     private static final int TABLE_VERSION_4 = 4;
-    private static final int TABLE_VERSION_CURRENT = TABLE_VERSION_4;
+    private static final int TABLE_VERSION_5 = 5;
+    private static final int TABLE_VERSION_CURRENT = TABLE_VERSION_5;
 
     private final HikariPool dbPool;
     private final String tableName, streaksTableName;
@@ -47,7 +48,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
                 try (ResultSet t = connection.getMetaData().getTables(null, null, tableName, null)) {
                     if (!t.next()) {
                         try (Statement statement = connection.createStatement()) {
-                            statement.executeUpdate("CREATE TABLE " + tableName + " (uuid VARCHAR(36) PRIMARY KEY NOT NULL, last_name VARCHAR(16), votes INT NOT NULL, last_vote TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+                            statement.executeUpdate("CREATE TABLE " + tableName + " (uuid VARCHAR(36) PRIMARY KEY NOT NULL, last_name VARCHAR(16), votes INT NOT NULL, last_vote TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_votes VARCHAR(256))");
                             // This may speed up leaderboards
                             statement.executeUpdate("CREATE INDEX uuid_votes_idx ON " + tableName + " (uuid, votes)");
                         }
@@ -73,6 +74,12 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
                                     // In case invalid vote counts snuck in, tell MySQL to say it's zero.
                                     statement.executeUpdate("ALTER TABLE " + tableName + " MODIFY votes int(11) NOT NULL DEFAULT 0");
                                 }
+                            }
+                            if (ver < TABLE_VERSION_5) {
+                                try (Statement statement = connection.createStatement()) {
+                                    statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN last_votes VARCHAR(256)");
+                                }
+                                isUpdated = true;
                             }
                         }
                     }
@@ -106,28 +113,34 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
     }
 
     @Override
-    public void addVote(Vote vote) {
+    public void addVote(Vote vote, PlayerVotes playerVotes) {
         if (readOnly)
             return;
 
         Preconditions.checkNotNull(vote, "vote");
         try (Connection connection = dbPool.getConnection()) {
+            Timestamp voteReceivedTimestamp = new Timestamp(vote.getReceived()
+                    .getTime());
             if (vote.getName() != null) {
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, last_name, votes, last_vote) VALUES (?, ?, 1, ?)" +
-                        " ON DUPLICATE KEY UPDATE votes = votes + 1, last_name = ?, last_vote = ?")) {
+                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, last_name, votes, last_vote, last_votes) VALUES (?, ?, 1, ?, ?)" +
+                        " ON DUPLICATE KEY UPDATE votes = votes + 1, last_name = ?, last_vote = ?, last_votes = ?")) {
                     statement.setString(1, vote.getUuid().toString());
                     statement.setString(2, vote.getName());
-                    statement.setTimestamp(3, new Timestamp(vote.getReceived().getTime()));
-                    statement.setString(4, vote.getName());
-                    statement.setTimestamp(5, new Timestamp(vote.getReceived().getTime()));
+                    statement.setTimestamp(3, voteReceivedTimestamp);
+                    statement.setString(4, playerVotes.getSerializedLastVotes());
+                    statement.setString(5, vote.getName());
+                    statement.setTimestamp(6, voteReceivedTimestamp);
+                    statement.setString(7, playerVotes.getSerializedLastVotes());
                     statement.executeUpdate();
                 }
             } else {
-                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, last_name, votes, last_vote) VALUES (?, NULL, 1, ?)" +
-                        " ON DUPLICATE KEY UPDATE votes = votes + 1, last_vote = ?")) {
+                try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, last_name, votes, last_vote, last_votes) VALUES (?, NULL, 1, ?, ?)" +
+                        " ON DUPLICATE KEY UPDATE votes = votes + 1, last_vote = ?, last_votes = ?")) {
                     statement.setString(1, vote.getUuid().toString());
-                    statement.setTimestamp(2, new Timestamp(vote.getReceived().getTime()));
-                    statement.setTimestamp(3, new Timestamp(vote.getReceived().getTime()));
+                    statement.setTimestamp(2, voteReceivedTimestamp);
+                    statement.setString(3, playerVotes.getSerializedLastVotes());
+                    statement.setTimestamp(4, voteReceivedTimestamp);
+                    statement.setString(5, playerVotes.getSerializedLastVotes());
                     statement.executeUpdate();
                 }
             }
@@ -184,7 +197,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
 
         Preconditions.checkNotNull(player, "player");
         try (Connection connection = dbPool.getConnection()) {
-            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, votes, last_vote) VALUES (?, ?, ?)" +
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + tableName + " (uuid, votes, last_vote, last_votes) VALUES (?, ?, ?, NULL)" +
                     " ON DUPLICATE KEY UPDATE votes = ?, last_vote = ?")) {
                 statement.setString(1, player.toString());
                 statement.setInt(2, votes);
@@ -216,19 +229,23 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
     public PlayerVotes getVotes(UUID player) {
         Preconditions.checkNotNull(player, "player");
         try (Connection connection = dbPool.getConnection()) {
-            try (PreparedStatement statement = connection.prepareStatement("SELECT last_name, votes, last_vote FROM " + tableName + " WHERE uuid = ?")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT last_name, votes, last_votes FROM " + tableName + " WHERE uuid = ?")) {
                 statement.setString(1, player.toString());
                 try (ResultSet resultSet = statement.executeQuery()) {
                     if (resultSet.next()) {
-                        return new PlayerVotes(player, resultSet.getString(1), resultSet.getInt(2), resultSet.getDate(3), PlayerVotes.Type.CURRENT);
+                        return new PlayerVotes(player,
+                                resultSet.getString(1),
+                                resultSet.getInt(2),
+                                PlayerVotes.deserializeLastVotes(resultSet.getString(3)),
+                                PlayerVotes.Type.CURRENT);
                     } else {
-                        return new PlayerVotes(player, null, 0, null, PlayerVotes.Type.CURRENT);
+                        return new PlayerVotes(player, null, 0, Collections.emptyMap(), PlayerVotes.Type.CURRENT);
                     }
                 }
             }
         } catch (SQLException e) {
             SuperbVote.getPlugin().getLogger().log(Level.SEVERE, "Unable to get votes for " + player.toString(), e);
-            return new PlayerVotes(player, null, 0, null, PlayerVotes.Type.CURRENT);
+            return new PlayerVotes(player, null, 0, Collections.emptyMap(), PlayerVotes.Type.CURRENT);
         }
     }
 
@@ -236,14 +253,17 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
     public List<PlayerVotes> getTopVoters(int amount, int page) {
         int offset = page * amount;
         try (Connection connection = dbPool.getConnection()) {
-            try (PreparedStatement statement = connection.prepareStatement("SELECT uuid, last_name, votes, last_vote FROM " + tableName + " WHERE votes > 0 ORDER BY votes DESC " +
+            try (PreparedStatement statement = connection.prepareStatement("SELECT uuid, last_name, votes, last_votes FROM " + tableName + " WHERE votes > 0 ORDER BY votes DESC " +
                     "LIMIT " + amount + " OFFSET " + offset)) {
                 try (ResultSet resultSet = statement.executeQuery()) {
                     List<PlayerVotes> records = new ArrayList<>();
                     while (resultSet.next()) {
                         UUID uuid = UUID.fromString(resultSet.getString(1));
                         String name = resultSet.getString(2);
-                        records.add(new PlayerVotes(uuid, name, resultSet.getInt(3), resultSet.getDate(4), PlayerVotes.Type.CURRENT));
+                        records.add(new PlayerVotes(uuid, name,
+                                resultSet.getInt(3),
+                                PlayerVotes.deserializeLastVotes(resultSet.getString(4)),
+                                PlayerVotes.Type.CURRENT));
                     }
                     return records;
                 }
@@ -293,7 +313,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
         List<PlayerVotes> votes = new ArrayList<>();
         try (Connection connection = dbPool.getConnection()) {
             String valueStatement = Joiner.on(", ").join(Collections.nCopies(onlinePlayers.size(), "?"));
-            try (PreparedStatement statement = connection.prepareStatement("SELECT uuid, last_name, votes, last_vote, (DATE(last_vote) = CURRENT_DATE()) AS has_voted_today FROM " + tableName + " WHERE uuid IN (" + valueStatement + ")")) {
+            try (PreparedStatement statement = connection.prepareStatement("SELECT uuid, last_name, votes, last_votes, (DATE(last_vote) = CURRENT_DATE()) AS has_voted_today FROM " + tableName + " WHERE uuid IN (" + valueStatement + ")")) {
                 for (int i = 0; i < onlinePlayers.size(); i++) {
                     statement.setString(i + 1, onlinePlayers.get(i).toString());
                 }
@@ -308,7 +328,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
                         PlayerVotes pv = new PlayerVotes(UUID.fromString(resultSet.getString(1)),
                                 resultSet.getString(2),
                                 resultSet.getInt(3),
-                                resultSet.getDate(4),
+                                PlayerVotes.deserializeLastVotes(resultSet.getString(4)),
                                 PlayerVotes.Type.CURRENT);
                         votes.add(pv);
                     }
@@ -318,7 +338,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
                 List<UUID> missing = new ArrayList<>(onlinePlayers);
                 missing.removeAll(found);
                 for (UUID uuid : missing) {
-                    votes.add(new PlayerVotes(uuid, null, 0, null, PlayerVotes.Type.CURRENT));
+                    votes.add(new PlayerVotes(uuid, null, 0, Collections.emptyMap(), PlayerVotes.Type.CURRENT));
                 }
             }
             return votes;

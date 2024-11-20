@@ -1,7 +1,7 @@
 package io.minimum.minecraft.superbvote.util;
 
 import com.google.common.io.ByteStreams;
-import io.minimum.minecraft.superbvote.SuperbVote;;
+import io.minimum.minecraft.superbvote.SuperbVote;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.event.EventHandler;
@@ -39,7 +39,7 @@ public class SpigotUpdater implements Runnable, Listener {
     @Override
     public void run() {
         String myVersion = SuperbVote.getPlugin().getDescription().getVersion();
-        if (myVersion.endsWith("-SNAPSHOT")) {
+        if (myVersion.endsWith("-SNAPSHOT") || myVersion.endsWith("-CORP")) {
             // Nothing to do.
             return;
         }

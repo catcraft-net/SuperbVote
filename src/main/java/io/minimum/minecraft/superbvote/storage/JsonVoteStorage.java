@@ -90,7 +90,7 @@ public class JsonVoteStorage implements VoteStorage {
     }
 
     @Override
-    public void addVote(Vote vote) {
+    public void addVote(Vote vote, PlayerVotes playerVotes) {
         Preconditions.checkNotNull(vote, "vote");
         rwl.writeLock().lock();
         try {
@@ -144,9 +144,9 @@ public class JsonVoteStorage implements VoteStorage {
         try {
             PlayerRecord pr = voteCounts.get(player);
             if (pr == null) {
-                return new PlayerVotes(player, null, 0, null, PlayerVotes.Type.CURRENT);
+                return new PlayerVotes(player, null, 0, Collections.emptyMap(), PlayerVotes.Type.CURRENT);
             }
-            return new PlayerVotes(player, pr.lastKnownUsername, pr.votes, Date.from(Instant.ofEpochMilli(pr.lastVoted)), PlayerVotes.Type.CURRENT);
+            return new PlayerVotes(player, pr.lastKnownUsername, pr.votes, Collections.emptyMap(), PlayerVotes.Type.CURRENT);
         } finally {
             rwl.readLock().unlock();
         }
@@ -163,7 +163,8 @@ public class JsonVoteStorage implements VoteStorage {
                     .skip(skip)
                     .limit(amount)
                     .map(e -> new PlayerVotes(e.getKey(), e.getValue().lastKnownUsername, e.getValue().votes,
-                            Date.from(Instant.ofEpochMilli(e.getValue().lastVoted)), PlayerVotes.Type.CURRENT))
+                            Collections.emptyMap(),
+                            PlayerVotes.Type.CURRENT))
                     .collect(Collectors.toList());
         } finally {
             rwl.readLock().unlock();

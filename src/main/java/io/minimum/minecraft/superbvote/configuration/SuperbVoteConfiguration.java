@@ -202,6 +202,11 @@ public class SuperbVoteConfiguration {
                     file = "votes.json";
                     SuperbVote.getPlugin().getLogger().info("No file found in configuration, using 'votes.json'.");
                 }
+                if (configuration.getBoolean("votes.one-vote-per-day")) {
+                    SuperbVote.getPlugin().getLogger()
+                            .warning("votes.one-vote-per-day=true is not fully supported with JSON storage! " +
+                                    "Use mysql instead if you need this feature to work properly.");
+                }
                 return new JsonVoteStorage(new File(SuperbVote.getPlugin().getDataFolder(), file));
             case "mysql":
                 String host = configuration.getString("storage.mysql.host", "localhost");

@@ -24,6 +24,14 @@ public class PlayerVotes {
     private final Map<String, Date> lastVotes;
     private final Type type;
 
+    public PlayerVotes(UUID uuid, String associatedUsername, int votes, Map<String, Date> lastVotes, Type type) {
+        this.uuid = uuid;
+        this.associatedUsername = associatedUsername;
+        this.votes = votes;
+        this.lastVotes = new HashMap<>(lastVotes);
+        this.type = type;
+    }
+
     public String getAssociatedUsername() {
         if (associatedUsername == null) {
             return Bukkit.getOfflinePlayer(uuid).getName();

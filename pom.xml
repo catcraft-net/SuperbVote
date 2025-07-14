@@ -8,6 +8,13 @@
     <artifactId>SuperbVote</artifactId>
     <version>0.6.2-CORP</version>
 
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/catcraft-net/io.minimum.minecraft.SuberbVote</url>
+    </repository>
+  </distributionManagement>
+         
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>

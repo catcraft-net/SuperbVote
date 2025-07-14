@@ -48,7 +48,7 @@ public class MysqlVoteStorage implements ExtendedVoteStorage {
                 try (ResultSet t = connection.getMetaData().getTables(null, null, tableName, null)) {
                     if (!t.next()) {
                         try (Statement statement = connection.createStatement()) {
-                            statement.executeUpdate("CREATE TABLE " + tableName + " (uuid VARCHAR(36) PRIMARY KEY NOT NULL, last_name VARCHAR(16), votes INT NOT NULL, last_vote TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_votes VARCHAR(256))");
+                            statement.executeUpdate("CREATE TABLE " + tableName + " (uuid VARCHAR(36) PRIMARY KEY NOT NULL, last_name VARCHAR(16), votes INT NOT NULL, last_vote TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, last_votes VARCHAR(2560))");
                             // This may speed up leaderboards
                             statement.executeUpdate("CREATE INDEX uuid_votes_idx ON " + tableName + " (uuid, votes)");
                         }

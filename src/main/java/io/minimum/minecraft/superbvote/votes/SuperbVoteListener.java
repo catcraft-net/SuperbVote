@@ -12,6 +12,7 @@ import io.minimum.minecraft.superbvote.util.PlayerVotes;
 import io.minimum.minecraft.superbvote.votes.rewards.VoteReward;
 import java.util.HashMap;
 import java.util.Map;
+import net.luckperms.api.LuckPermsProvider;
 import org.apache.commons.lang3.time.DateUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -35,39 +36,43 @@ public class SuperbVoteListener implements Listener {
             return;
         }
 
+        String voteUsername = event.getVote().getUsername();
+
         Bukkit.getScheduler().runTaskAsynchronously(SuperbVote.getPlugin(), () -> {
-            String voteUsername = event.getVote()
-                    .getUsername();
-            OfflinePlayer op = Bukkit.getOfflinePlayer(voteUsername);
-            if (!op.hasPlayedBefore()) {
+            UUID playerId = LuckPermsProvider.get().getUserManager().lookupUniqueId(voteUsername).join();
+
+            if (playerId == null) {
                 SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + voteUsername +
                         " (service: " + event.getVote().getServiceName() + "): Unknown player.");
                 return;
             }
+
             String worldName = null;
-            if (op.isOnline()) {
-                worldName = op.getPlayer().getWorld().getName();
+            Player player = Bukkit.getPlayer(playerId);
+
+            if (player != null) {
+                worldName = player.getWorld().getName();
             }
 
-            Vote vote = new Vote(op.getName(), op.getUniqueId(), event.getVote().getServiceName(),
+            Vote vote = new Vote(voteUsername, playerId, event.getVote().getServiceName(),
                     event.getVote().getAddress().equals(SuperbVoteCommand.FAKE_HOST_NAME_FOR_VOTE), worldName, new Date());
 
             VoteStorage voteStorage = SuperbVote.getPlugin().getVoteStorage();
-            PlayerVotes pvCurrent = voteStorage.getVotes(op.getUniqueId());
-            PlayerVotes pv = new PlayerVotes(op.getUniqueId(), op.getName(), pvCurrent.getVotes() + 1,
+            PlayerVotes pvCurrent = voteStorage.getVotes(playerId);
+            PlayerVotes pv = new PlayerVotes(playerId, voteUsername, pvCurrent.getVotes() + 1,
                     pvCurrent.getLastVotes(), PlayerVotes.Type.FUTURE);
 
-            VoteStreak voteStreak = voteStorage.getVoteStreakIfSupported(op.getUniqueId(), false);
+            VoteStreak voteStreak = voteStorage.getVoteStreakIfSupported(playerId, false);
             if (!vote.isFakeVote()) {
                 if (SuperbVote.getPlugin().getConfiguration().getStreaksConfiguration().isSharedCooldownPerService()) {
                     if (voteStreak == null) {
                         // becomes a required value
-                        voteStreak = voteStorage.getVoteStreakIfSupported(op.getUniqueId(), true);
+                        voteStreak = voteStorage.getVoteStreakIfSupported(playerId, true);
                     }
                     if (voteStreak != null && voteStreak.getServices().containsKey(vote.getServiceName())) {
                         long difference = SuperbVote.getPlugin().getVoteServiceCooldown().getMax() - voteStreak.getServices().get(vote.getServiceName());
                         if (difference > 0) {
-                            SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + vote.getName() + " (service: " +
+                            SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + voteUsername + " (service: " +
                                     vote.getServiceName() + ") due to [shared] service cooldown.");
                             return;
                         }
@@ -82,7 +87,7 @@ public class SuperbVoteListener implements Listener {
             }
 
             processVote(pv, voteStreak, vote, SuperbVote.getPlugin().getConfig().getBoolean("broadcast.enabled"),
-                    !op.isOnline() && SuperbVote.getPlugin().getConfiguration().requirePlayersOnline(),
+                    Bukkit.getPlayer(playerId) == null && SuperbVote.getPlugin().getConfiguration().requirePlayersOnline(),
                     false);
         });
     }

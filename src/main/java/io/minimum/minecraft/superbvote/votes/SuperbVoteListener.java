@@ -70,7 +70,7 @@ public class SuperbVoteListener implements Listener {
                         voteStreak = voteStorage.getVoteStreakIfSupported(playerId, true);
                     }
                     if (voteStreak != null && voteStreak.getServices().containsKey(vote.getServiceName())) {
-                        long difference = SuperbVote.getPlugin().getVoteServiceCooldown().getMax() - voteStreak.getServices().get(vote.getServiceName());
+                        long difference = SuperbVote.getPlugin().getVoteServiceCooldown().getMax(vote.getServiceName()) - voteStreak.getServices().get(vote.getServiceName());
                         if (difference > 0) {
                             SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + voteUsername + " (service: " +
                                     vote.getServiceName() + ") due to [shared] service cooldown.");

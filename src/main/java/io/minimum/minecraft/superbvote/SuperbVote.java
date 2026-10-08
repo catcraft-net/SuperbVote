@@ -20,6 +20,8 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class SuperbVote extends JavaPlugin {
     @Getter
@@ -65,7 +67,7 @@ public class SuperbVote extends JavaPlugin {
         recentVotesStorage = new RecentVotesStorage();
 
         scoreboardHandler = new ScoreboardHandler();
-        voteServiceCooldown = new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600));
+        voteServiceCooldown = loadVoteServiceCooldown();
 
         topPlayerSignStorage = new TopPlayerSignStorage();
         try {
@@ -117,11 +119,27 @@ public class SuperbVote extends JavaPlugin {
         }
     }
 
+    private VoteServiceCooldown loadVoteServiceCooldown() {
+        // A list rather than a map: service names contain dots (Minecraft.Buzz), which a config key would treat as a path.
+        Map<String, Integer> overrides = new HashMap<>();
+        for (Map<?, ?> entry : getConfig().getMapList("votes.cooldown-per-service-overrides")) {
+            Object service = entry.get("service");
+            Object seconds = entry.get("seconds");
+            if (service instanceof String && seconds instanceof Integer && (Integer) seconds >= 0) {
+                overrides.put((String) service, (Integer) seconds);
+            } else {
+                getLogger().warning("Ignoring an entry in votes.cooldown-per-service-overrides: it needs a "
+                        + "\"service\" name and a \"seconds\" number (0 or more), but got " + entry);
+            }
+        }
+        return new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600), overrides);
+    }
+
     public void reloadPlugin() {
         reloadConfig();
         configuration = new SuperbVoteConfiguration(getConfig());
         scoreboardHandler.reload();
-        voteServiceCooldown = new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600));
+        voteServiceCooldown = loadVoteServiceCooldown();
         getServer().getScheduler().runTaskAsynchronously(this, getScoreboardHandler()::doPopulate);
         registerCommands();
 

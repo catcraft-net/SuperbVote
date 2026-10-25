@@ -29,6 +29,11 @@ votes:
   # Whether to allow only one vote per day for each player
   one-vote-per-day: false
 
+  # Floodgate's username-prefix. Bedrock players can vote with their gamertag without it (many vote sites
+  # reject the prefix) and the vote goes to the prefixed account if no Java player has that name, or if only
+  # the Bedrock player is online. Set to "" to turn this off.
+  bedrock-username-prefix: "_"
+
 # Streaks configuration
 # Important: Streaks does not support JSON storage
 streaks:

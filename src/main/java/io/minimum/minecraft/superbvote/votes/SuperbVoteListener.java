@@ -36,10 +36,26 @@ public class SuperbVoteListener implements Listener {
             return;
         }
 
-        String voteUsername = event.getVote().getUsername();
+        String siteUsername = event.getVote().getUsername();
 
         Bukkit.getScheduler().runTaskAsynchronously(SuperbVote.getPlugin(), () -> {
+            String voteUsername = siteUsername;
             UUID playerId = LuckPermsProvider.get().getUserManager().lookupUniqueId(voteUsername).join();
+
+            // Many vote sites reject Floodgate's prefix, so Bedrock players vote with their bare gamertag.
+            // Credit the prefixed Bedrock account when there's no Java player by that name, or when only
+            // the Bedrock one is online.
+            String bedrockName = toBedrockName(siteUsername);
+            if (bedrockName != null) {
+                UUID bedrockId = LuckPermsProvider.get().getUserManager().lookupUniqueId(bedrockName).join();
+                if (bedrockId != null && (playerId == null
+                        || (Bukkit.getPlayer(bedrockId) != null && Bukkit.getPlayer(playerId) == null))) {
+                    SuperbVote.getPlugin().getLogger().log(Level.INFO, "Vote from " + siteUsername + " (service: " +
+                            event.getVote().getServiceName() + ") credited to Bedrock player " + bedrockName);
+                    playerId = bedrockId;
+                    voteUsername = bedrockName;
+                }
+            }
 
             if (playerId == null) {
                 SuperbVote.getPlugin().getLogger().log(Level.WARNING, "Ignoring vote from " + voteUsername +
@@ -92,7 +108,18 @@ public class SuperbVoteListener implements Listener {
         });
     }
 
-    private void processVote(PlayerVotes pv, VoteStreak voteStreak, Vote vote, boolean broadcast, boolean queue, boolean wasQueued) {
+    // The name Floodgate gives this gamertag (prefix added, spaces replaced, cut to 16), or null if
+    // the feature is off or the name already has the prefix.
+    private static String toBedrockName(String username) {
+        String prefix = SuperbVote.getPlugin().getConfig().getString("votes.bedrock-username-prefix", "_");
+        if (prefix == null || prefix.isEmpty() || username == null || username.isEmpty() || username.startsWith(prefix)) {
+            return null;
+        }
+        String name = prefix + username.trim().replace(' ', '_');
+        return name.length() > 16 ? name.substring(0, 16) : name;
+    }
+
+    private void processVote(PlayerVotes pv,VoteStreak voteStreak, Vote vote, boolean broadcast, boolean queue, boolean wasQueued) {
         List<VoteReward> bestRewards = SuperbVote.getPlugin().getConfiguration().getBestRewards(vote, pv);
         MessageContext context = new MessageContext(vote, pv, voteStreak, Bukkit.getOfflinePlayer(vote.getUuid()));
         boolean canBroadcast = SuperbVote.getPlugin().getRecentVotesStorage().canBroadcast(vote.getUuid());

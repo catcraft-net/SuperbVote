@@ -34,6 +34,7 @@ public class RewardMatchers {
             .add(ChancePercentageRewardMatcher.FACTORY)
             .add(CumulativeVotesEveryRewardMatcher.FACTORY)
             .add(CumulativeVotesRewardMatcher.FACTORY)
+            .add(DailyVotesRewardMatcher.FACTORY)
             .add(PermissionRewardMatcher.FACTORY)
             .add(ScriptRewardMatcher.FACTORY)
             .add(ServiceRewardMatcher.FACTORY)

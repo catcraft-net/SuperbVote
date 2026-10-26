@@ -24,8 +24,8 @@ votes:
   cooldown-per-service: 3600
 
   # Optional: a different cooldown, in seconds, for specific services. "service" is the name the voting site
-  # sends (see the "[Votifier] Got a vote" lines in your log, "from:"); it is matched ignoring case. Any service
-  # not listed here uses cooldown-per-service above.
+  # sends (the "from:" part of the "[Votifier] Got a ... vote -> Vote (from:..." lines in your log); it is
+  # matched ignoring case. Any service not listed here uses cooldown-per-service above.
   #
   # Most voting sites already enforce their own limit, and some reset once per day at a fixed time instead of
   # waiting a set number of hours, so two legitimate votes can arrive less than cooldown-per-service apart

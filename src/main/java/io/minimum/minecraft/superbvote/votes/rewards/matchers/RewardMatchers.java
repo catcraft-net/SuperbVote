@@ -23,6 +23,7 @@ public class RewardMatchers {
             .add("cumulative-votes")
             .add("every-cumulative-votes")
             .add("daily-votes")
+            .add("bedrock-daily-votes")
             .add("group")
             .add("groups")
             .add("world")

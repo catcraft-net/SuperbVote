@@ -20,6 +20,9 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 public class SuperbVote extends JavaPlugin {
     @Getter
@@ -65,7 +68,7 @@ public class SuperbVote extends JavaPlugin {
         recentVotesStorage = new RecentVotesStorage();
 
         scoreboardHandler = new ScoreboardHandler();
-        voteServiceCooldown = new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600));
+        voteServiceCooldown = loadVoteServiceCooldown();
 
         topPlayerSignStorage = new TopPlayerSignStorage();
         try {
@@ -117,11 +120,51 @@ public class SuperbVote extends JavaPlugin {
         }
     }
 
+    private VoteServiceCooldown loadVoteServiceCooldown() {
+        // A list rather than a map: service names contain dots (Minecraft.Buzz), which a config key would treat as a path.
+        Map<String, Integer> overrides = new HashMap<>();
+        for (Map<?, ?> entry : getConfig().getMapList("votes.cooldown-per-service-overrides")) {
+            Object service = entry.get("service");
+            Integer seconds = parseSeconds(entry.get("seconds"));
+            if (service instanceof String && !((String) service).trim().isEmpty() && seconds != null) {
+                Integer previous = overrides.put(((String) service).trim().toLowerCase(Locale.ROOT), seconds);
+                if (previous != null) {
+                    getLogger().warning("votes.cooldown-per-service-overrides lists \"" + service
+                            + "\" more than once; using the last entry (" + seconds + " seconds).");
+                }
+            } else {
+                getLogger().warning("Ignoring an entry in votes.cooldown-per-service-overrides: it needs a "
+                        + "\"service\" name and a \"seconds\" number (0 or more), but got " + entry);
+            }
+        }
+        if (!overrides.isEmpty()) {
+            getLogger().info("Per-service vote cooldown overrides: " + overrides);
+        }
+        return new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600), overrides);
+    }
+
+    // Accepts 300, 300L and "300" (YAML may hand back any of these); null if not a whole number from 0 to Integer.MAX_VALUE.
+    private static Integer parseSeconds(Object value) {
+        long seconds;
+        if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte) {
+            seconds = ((Number) value).longValue();
+        } else if (value instanceof String) {
+            try {
+                seconds = Long.parseLong(((String) value).trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+        return seconds >= 0 && seconds <= Integer.MAX_VALUE ? (int) seconds : null;
+    }
+
     public void reloadPlugin() {
         reloadConfig();
         configuration = new SuperbVoteConfiguration(getConfig());
         scoreboardHandler.reload();
-        voteServiceCooldown = new VoteServiceCooldown(getConfig().getInt("votes.cooldown-per-service", 3600));
+        voteServiceCooldown = loadVoteServiceCooldown();
         getServer().getScheduler().runTaskAsynchronously(this, getScoreboardHandler()::doPopulate);
         registerCommands();
 

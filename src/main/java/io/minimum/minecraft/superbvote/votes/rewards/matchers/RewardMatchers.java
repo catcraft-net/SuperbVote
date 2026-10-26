@@ -22,6 +22,7 @@ public class RewardMatchers {
             .add("services")
             .add("cumulative-votes")
             .add("every-cumulative-votes")
+            .add("daily-votes")
             .add("group")
             .add("groups")
             .add("world")

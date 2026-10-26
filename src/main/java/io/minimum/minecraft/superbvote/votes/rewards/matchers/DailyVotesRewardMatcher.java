@@ -7,6 +7,7 @@ import io.minimum.minecraft.superbvote.votes.Vote;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -22,13 +23,18 @@ import java.util.concurrent.TimeUnit;
  * <p>Votes received more than 24 hours ago never match. Votes are forwarded to every realm, so a realm
  * queues months of votes for players who play elsewhere; without this, logging in replayed every old
  * day's crossing at once (dozens of piñata votes and broadcasts in one tick).
+ *
+ * <p>{@code bedrock-daily-votes: M} (optional, in the same reward) lowers the count for Bedrock players
+ * (Floodgate UUIDs), since some vote sites only accept Java names.
  */
 public class DailyVotesRewardMatcher implements RewardMatcher {
     static RewardMatcherFactory FACTORY = section -> {
         if (section.isInt("daily-votes")) {
             int votes = section.getInt("daily-votes");
             Preconditions.checkArgument(votes >= 1, "daily-votes number must be greater than or equal to 1.");
-            return Optional.of(new DailyVotesRewardMatcher(votes));
+            int bedrockVotes = section.getInt("bedrock-daily-votes", votes);
+            Preconditions.checkArgument(bedrockVotes >= 1, "bedrock-daily-votes number must be greater than or equal to 1.");
+            return Optional.of(new DailyVotesRewardMatcher(votes, bedrockVotes));
         }
         return Optional.empty();
     };
@@ -36,9 +42,20 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
     private static final long WINDOW_MILLIS = TimeUnit.HOURS.toMillis(24);
 
     private final int votes;
+    private final int bedrockVotes;
 
     public DailyVotesRewardMatcher(int votes) {
+        this(votes, votes);
+    }
+
+    public DailyVotesRewardMatcher(int votes, int bedrockVotes) {
         this.votes = votes;
+        this.bedrockVotes = bedrockVotes;
+    }
+
+    /** Floodgate gives Bedrock players UUIDs whose top 64 bits are zero (00000000-0000-0000-xxxx-...). */
+    static boolean isBedrock(UUID uuid) {
+        return uuid != null && uuid.getMostSignificantBits() == 0;
     }
 
     @Override
@@ -52,7 +69,8 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
             before++;
             if (entry.getKey().equals(vote.getServiceName())) siteAlreadyCounted = true;
         }
-        return !siteAlreadyCounted && before + 1 == this.votes;
+        int needed = isBedrock(vote.getUuid()) ? this.bedrockVotes : this.votes;
+        return !siteAlreadyCounted && before + 1 == needed;
     }
 
     private static boolean inWindow(Date date, long now) {

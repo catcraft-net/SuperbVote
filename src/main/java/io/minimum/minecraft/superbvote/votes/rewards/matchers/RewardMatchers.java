@@ -25,6 +25,7 @@ public class RewardMatchers {
             .add("daily-votes")
             .add("bedrock-daily-votes")
             .add("max-age-hours")
+            .add("daily-votes-repeat")
             .add("group")
             .add("groups")
             .add("world")

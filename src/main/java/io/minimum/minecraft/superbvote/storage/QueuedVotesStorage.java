@@ -22,7 +22,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class QueuedVotesStorage {
     private final Map<UUID, List<Vote>> queuedVotes = new ConcurrentHashMap<>(32, 0.75f, 2);
-    private final Gson gson = new GsonBuilder().setDateFormat("MMM d, yyyy h:mm:ss").create();
+    // 24-hour clock: "h" without an AM/PM marker read afternoon votes back 12 hours early after a restart.
+    private final Gson gson = new GsonBuilder().setDateFormat("MMM d, yyyy H:mm:ss").create();
     private final File saveTo;
 
     public QueuedVotesStorage(File file) throws IOException {

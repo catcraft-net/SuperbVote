@@ -30,7 +30,8 @@ public class RecentVoteRewardMatcher implements RewardMatcher {
 
     @Override
     public boolean matches(Vote vote, PlayerVotes pv) {
-        if (vote.getReceived() == null) return true;
+        // New votes always carry their received time; only an old queue entry can lack it, so treat it as old.
+        if (vote.getReceived() == null) return false;
         return System.currentTimeMillis() - vote.getReceived().getTime() < maxAgeMillis;
     }
 }

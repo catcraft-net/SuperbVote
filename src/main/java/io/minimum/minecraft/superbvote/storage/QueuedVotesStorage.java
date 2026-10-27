@@ -36,8 +36,18 @@ public class QueuedVotesStorage {
             Map<UUID, List<Vote>> votes = gson.fromJson(reader, new TypeToken<Map<UUID, List<Vote>>>() {
             }.getType());
             if (votes != null) {
+                int dropped = 0;
                 for (Map.Entry<UUID, List<Vote>> entry : votes.entrySet()) {
-                    queuedVotes.put(entry.getKey(), new CopyOnWriteArrayList<>(entry.getValue()));
+                    // An entry without a received time can't be stored (MysqlVoteStorage needs it) or dated, so drop it.
+                    List<Vote> valid = new CopyOnWriteArrayList<>();
+                    for (Vote vote : entry.getValue()) {
+                        if (vote != null && vote.getReceived() != null) valid.add(vote);
+                        else dropped++;
+                    }
+                    if (!valid.isEmpty()) queuedVotes.put(entry.getKey(), valid);
+                }
+                if (dropped > 0) {
+                    SuperbVote.getPlugin().getLogger().warning("Dropped " + dropped + " queued vote(s) with no received time from " + saveTo.getName() + ".");
                 }
             }
         } catch (JsonSyntaxException e) {

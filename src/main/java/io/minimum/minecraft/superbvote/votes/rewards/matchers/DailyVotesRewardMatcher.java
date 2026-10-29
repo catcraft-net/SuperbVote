@@ -26,6 +26,10 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>{@code bedrock-daily-votes: M} (optional, in the same reward) lowers the count for Bedrock players
  * (Floodgate UUIDs), since some vote sites only accept Java names.
+ *
+ * <p>{@code daily-votes-repeat: true} (optional) matches every vote that leaves the player at N or more sites, not
+ * only the one that crosses N. Use it for rewards that must keep renewing while a player keeps voting, such as a
+ * 24-hour permission: someone who re-votes every site as it reopens stays at 9-10 sites and never crosses N again.
  */
 public class DailyVotesRewardMatcher implements RewardMatcher {
     static RewardMatcherFactory FACTORY = section -> {
@@ -34,7 +38,7 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
             Preconditions.checkArgument(votes >= 1, "daily-votes number must be greater than or equal to 1.");
             int bedrockVotes = section.getInt("bedrock-daily-votes", votes);
             Preconditions.checkArgument(bedrockVotes >= 1, "bedrock-daily-votes number must be greater than or equal to 1.");
-            return Optional.of(new DailyVotesRewardMatcher(votes, bedrockVotes));
+            return Optional.of(new DailyVotesRewardMatcher(votes, bedrockVotes, section.getBoolean("daily-votes-repeat", false)));
         }
         return Optional.empty();
     };
@@ -43,14 +47,16 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
 
     private final int votes;
     private final int bedrockVotes;
+    private final boolean repeat;
 
     public DailyVotesRewardMatcher(int votes) {
-        this(votes, votes);
+        this(votes, votes, false);
     }
 
-    public DailyVotesRewardMatcher(int votes, int bedrockVotes) {
+    public DailyVotesRewardMatcher(int votes, int bedrockVotes, boolean repeat) {
         this.votes = votes;
         this.bedrockVotes = bedrockVotes;
+        this.repeat = repeat;
     }
 
     /** Floodgate gives Bedrock players UUIDs whose top 64 bits are zero (00000000-0000-0000-xxxx-...). */
@@ -60,7 +66,9 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
 
     @Override
     public boolean matches(Vote vote, PlayerVotes pv) {
-        long now = vote.getReceived() != null ? vote.getReceived().getTime() : System.currentTimeMillis();
+        // A vote without a received time (an old queue entry) can't be placed in the window, so it never matches.
+        if (vote.getReceived() == null) return false;
+        long now = vote.getReceived().getTime();
         if (System.currentTimeMillis() - now >= WINDOW_MILLIS) return false;
         int before = 0;
         boolean siteAlreadyCounted = false;
@@ -70,6 +78,7 @@ public class DailyVotesRewardMatcher implements RewardMatcher {
             if (entry.getKey().equals(vote.getServiceName())) siteAlreadyCounted = true;
         }
         int needed = isBedrock(vote.getUuid()) ? this.bedrockVotes : this.votes;
+        if (repeat) return before + (siteAlreadyCounted ? 0 : 1) >= needed;
         return !siteAlreadyCounted && before + 1 == needed;
     }
 

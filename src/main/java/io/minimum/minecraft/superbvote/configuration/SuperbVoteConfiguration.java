@@ -170,10 +170,6 @@ public class SuperbVoteConfiguration {
         return configuration.getBoolean("queue-votes", true);
     }
 
-    public int getQueueMaxAgeDays() {
-        return configuration.getInt("queue-max-age-days", 30);
-    }
-
     public static String replaceCommandPlaceholders(String text, Vote vote) {
         return text.replaceAll("%player%", vote.getName())
                 .replaceAll("%service%", vote.getServiceName())

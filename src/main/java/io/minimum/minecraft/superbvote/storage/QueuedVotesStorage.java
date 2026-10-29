@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 
 public class QueuedVotesStorage {
     private final Map<UUID, List<Vote>> queuedVotes = new ConcurrentHashMap<>(32, 0.75f, 2);
@@ -50,11 +49,6 @@ public class QueuedVotesStorage {
                 if (dropped > 0) {
                     SuperbVote.getPlugin().getLogger().warning("Dropped " + dropped + " queued vote(s) with no received time from " + saveTo.getName() + ".");
                 }
-                int expired = removeExpiredVotes();
-                if (expired > 0) {
-                    SuperbVote.getPlugin().getLogger().info("Dropped " + expired + " queued vote(s) older than " +
-                            SuperbVote.getPlugin().getConfiguration().getQueueMaxAgeDays() + " days from " + saveTo.getName() + ".");
-                }
             }
         } catch (JsonSyntaxException e) {
             String date = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
@@ -77,37 +71,10 @@ public class QueuedVotesStorage {
     public List<Vote> getAndRemoveVotes(UUID player) {
         Preconditions.checkNotNull(player, "player");
         List<Vote> votes = queuedVotes.remove(player);
-        if (votes == null) return ImmutableList.of();
-        long cutoff = expiryCutoff();
-        if (cutoff > 0) votes.removeIf(vote -> vote.getReceived().getTime() < cutoff);
-        return votes;
-    }
-
-    /**
-     * Votes are forwarded to every realm, so a realm queues votes for players who play elsewhere and may never
-     * log in there. Queued votes older than {@code queue-max-age-days} (0 keeps them forever) are dropped.
-     */
-    private int removeExpiredVotes() {
-        long cutoff = expiryCutoff();
-        if (cutoff <= 0) return 0;
-        int removed = 0;
-        for (Map.Entry<UUID, List<Vote>> entry : queuedVotes.entrySet()) {
-            List<Vote> votes = entry.getValue();
-            int before = votes.size();
-            votes.removeIf(vote -> vote.getReceived().getTime() < cutoff);
-            removed += before - votes.size();
-            if (votes.isEmpty()) queuedVotes.remove(entry.getKey(), votes);
-        }
-        return removed;
-    }
-
-    private long expiryCutoff() {
-        int days = SuperbVote.getPlugin().getConfiguration().getQueueMaxAgeDays();
-        return days > 0 ? System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days) : 0;
+        return votes != null ? votes : ImmutableList.of();
     }
 
     public void save() {
-        removeExpiredVotes();
         // Save to a temporary file and then copy over the existing file.
         try {
             Path tempPath = Files.createTempFile("superbvote-", ".json");

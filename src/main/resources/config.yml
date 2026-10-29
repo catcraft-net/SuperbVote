@@ -99,10 +99,6 @@ require-online: true
 # If this is disabled, the user won't get any rewards if they aren't online, even if they login afterwards.
 queue-votes: true
 
-# Queued votes older than this many days are dropped (on startup, every save and at login), for players who
-# never log in to this server. 0 keeps them forever.
-queue-max-age-days: 30
-
 # Broadcast settings:
 broadcast:
   # Should we broadcast votes at all?

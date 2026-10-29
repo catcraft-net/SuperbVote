@@ -18,12 +18,20 @@ public class CooldownHandler<T> {
     }
 
     public boolean triggerCooldown(T obj) {
+        return triggerCooldown(obj, max);
+    }
+
+    /**
+     * Like {@link #triggerCooldown(Object)}, but the cooldown started by this call lasts {@code seconds}
+     * instead of the default maximum.
+     */
+    public boolean triggerCooldown(T obj, int seconds) {
         Preconditions.checkNotNull(obj, "obj");
 
         LocalDateTime lastTime = cooldowns.get(obj);
         LocalDateTime now = LocalDateTime.now();
         if (lastTime == null || lastTime.isBefore(now)) {
-            cooldowns.put(obj, now.plusSeconds(max));
+            cooldowns.put(obj, now.plusSeconds(seconds));
             return false;
         }
         return true;

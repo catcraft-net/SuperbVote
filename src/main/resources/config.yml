@@ -23,6 +23,22 @@ votes:
   # Default: 3600 seconds (1 hour)
   cooldown-per-service: 3600
 
+  # Optional: a different cooldown, in seconds, for specific services. "service" is the name the voting site
+  # sends (the "from:" part of the "[Votifier] Got a ... vote -> Vote (from:..." lines in your log); it is
+  # matched ignoring case. Any service not listed here uses cooldown-per-service above.
+  #
+  # Most voting sites already enforce their own limit, and some reset once per day at a fixed time instead of
+  # waiting a set number of hours, so two legitimate votes can arrive less than cooldown-per-service apart
+  # (11:59pm and 12:01am). A short cooldown for those services keeps duplicate deliveries out without
+  # discarding those votes.
+  cooldown-per-service-overrides: []
+  # Example:
+  # cooldown-per-service-overrides:
+  #   - service: "Minecraft.Buzz"
+  #     seconds: 300
+  #   - service: "MCSL"
+  #     seconds: 300
+
   # Whether or not to treat fake votes as real votes
   process-fake-votes: true
 
@@ -82,6 +98,10 @@ require-online: true
 # Whether we should queue votes if players aren't online. Requires the above option to be set to true.
 # If this is disabled, the user won't get any rewards if they aren't online, even if they login afterwards.
 queue-votes: true
+
+# Queued votes older than this many days are dropped (on startup, every save and at login), for players who
+# never log in to this server. 0 keeps them forever.
+queue-max-age-days: 30
 
 # Broadcast settings:
 broadcast:

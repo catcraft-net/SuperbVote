@@ -70,6 +70,15 @@ streaks:
       You currently hold a vote streak of %streak% (%streak_days% days), keep going!
       You've voted on %streak_today_services% website(s) out of X today.
 
+# The website's vote page. daily-votes / bedrock-daily-votes can be "sites" or "sites-N" instead of a number:
+# the number of vote sites listed on this page, minus N. So adding or removing a site on the page changes how many
+# sites the reward needs, without editing this file. The page is read at start, on /sv reload and every
+# refresh-minutes; if it can't be read, the last count is kept (fallback-sites before the first read).
+vote-page:
+  url: ""
+  refresh-minutes: 180
+  fallback-sites: 10
+
 # Rewards. This is the main section you will need to edit. Ordering is important.
 rewards:
   # Example of matchers. See https://github.com/minecrafter/SuperbVote/wiki/Configuration#if for a full list of available

@@ -8,6 +8,7 @@ import io.minimum.minecraft.superbvote.signboard.TopPlayerSignListener;
 import io.minimum.minecraft.superbvote.signboard.TopPlayerSignStorage;
 import io.minimum.minecraft.superbvote.storage.QueuedVotesStorage;
 import io.minimum.minecraft.superbvote.storage.RecentVotesStorage;
+import io.minimum.minecraft.superbvote.storage.VotePageSites;
 import io.minimum.minecraft.superbvote.storage.VoteStorage;
 import io.minimum.minecraft.superbvote.util.BrokenNag;
 import io.minimum.minecraft.superbvote.util.SpigotUpdater;
@@ -34,6 +35,9 @@ public class SuperbVote extends JavaPlugin {
     @Getter
     private QueuedVotesStorage queuedVotes;
     @Getter
+    private VotePageSites votePageSites;
+    private BukkitTask votePageTask;
+    @Getter
     private RecentVotesStorage recentVotesStorage;
     @Getter
     private ScoreboardHandler scoreboardHandler;
@@ -47,6 +51,8 @@ public class SuperbVote extends JavaPlugin {
     public void onEnable() {
         plugin = this;
         saveDefaultConfig();
+        // Before the configuration: daily-votes: sites-N reads the site count while the rewards are parsed.
+        votePageSites = new VotePageSites(new File(getDataFolder(), "vote_page_sites.txt"));
         configuration = new SuperbVoteConfiguration(getConfig());
 
         if (configuration.isConfigurationError()) {
@@ -66,6 +72,8 @@ public class SuperbVote extends JavaPlugin {
         }
 
         recentVotesStorage = new RecentVotesStorage();
+
+        startVotePageTask();
 
         scoreboardHandler = new ScoreboardHandler();
         voteServiceCooldown = loadVoteServiceCooldown();
@@ -163,6 +171,7 @@ public class SuperbVote extends JavaPlugin {
     public void reloadPlugin() {
         reloadConfig();
         configuration = new SuperbVoteConfiguration(getConfig());
+        startVotePageTask();
         scoreboardHandler.reload();
         voteServiceCooldown = loadVoteServiceCooldown();
         getServer().getScheduler().runTaskAsynchronously(this, getScoreboardHandler()::doPopulate);
@@ -177,6 +186,18 @@ public class SuperbVote extends JavaPlugin {
         if (text != null && !text.isEmpty() && r > 0) {
             voteReminderTask = getServer().getScheduler().runTaskTimerAsynchronously(this, new VoteReminder(), 20 * r, 20 * r);
         }
+    }
+
+    /** Reads the vote page now and every vote-page.refresh-minutes, if vote-page.url is set. */
+    private void startVotePageTask() {
+        if (votePageTask != null) {
+            votePageTask.cancel();
+            votePageTask = null;
+        }
+        String url = getConfig().getString("vote-page.url", "");
+        if (url == null || url.trim().isEmpty()) return;
+        long period = Math.max(5, getConfig().getLong("vote-page.refresh-minutes", 180)) * 60 * 20;
+        votePageTask = getServer().getScheduler().runTaskTimerAsynchronously(this, votePageSites::refresh, 0, period);
     }
 
     public ClassLoader _exposeClassLoader() {
